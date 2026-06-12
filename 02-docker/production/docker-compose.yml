@@ -2,7 +2,7 @@
 # Docker Compose — Full Agent Stack
 #
 # Services:
-#   1. agent    — FastAPI AI agent (2 replicas)
+#   1. agent    — FastAPI AI agent (2 Uvicorn workers)
 #   2. redis    — Cache cho session và rate limiting
 #   3. qdrant   — Vector database cho RAG
 #   4. nginx    — Reverse proxy, load balancer
@@ -12,8 +12,6 @@
 # Stop:  docker compose down
 # ============================================================
 
-version: "3.9"
-
 services:
 
   # ──────────────────────────────────────
@@ -21,8 +19,8 @@ services:
   # ──────────────────────────────────────
   agent:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: 02-docker/production/Dockerfile
       target: runtime          # chỉ build stage "runtime", không build "builder"
     environment:
       - ENVIRONMENT=staging
@@ -74,7 +72,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
       interval: 15s
       timeout: 5s
       retries: 3

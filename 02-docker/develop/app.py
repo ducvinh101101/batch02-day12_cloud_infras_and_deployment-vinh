@@ -5,6 +5,7 @@ import os
 import time
 
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 import uvicorn
 from utils.mock_llm import ask
 
@@ -19,7 +20,7 @@ def root():
 
 @app.post("/ask")
 async def ask_agent(question: str):
-    return {"answer": ask(question)}
+    return {"answer": await run_in_threadpool(ask, question)}
 
 
 @app.get("/health")

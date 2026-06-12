@@ -11,7 +11,7 @@ Algorithm: Sliding Window Counter
 """
 import time
 from collections import defaultdict, deque
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 
 
 class RateLimiter:

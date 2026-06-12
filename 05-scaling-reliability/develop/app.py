@@ -19,6 +19,7 @@ Simulate shutdown:
     # Xem agent log graceful shutdown message
 """
 import os
+import asyncio
 import time
 import signal
 import logging
@@ -27,6 +28,7 @@ from contextlib import asynccontextmanager
 
 
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 import uvicorn
 from utils.mock_llm import ask
 
@@ -45,7 +47,7 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     logger.info("Agent starting up...")
     logger.info("Loading model and checking dependencies...")
-    time.sleep(0.2)  # simulate startup time
+    await asyncio.sleep(0.2)  # simulate startup time
     _is_ready = True
     logger.info("✅ Agent is ready!")
 
@@ -60,7 +62,7 @@ async def lifespan(app: FastAPI):
     elapsed = 0
     while _in_flight_requests > 0 and elapsed < timeout:
         logger.info(f"Waiting for {_in_flight_requests} in-flight requests...")
-        time.sleep(1)
+        await asyncio.sleep(1)
         elapsed += 1
 
     logger.info("✅ Shutdown complete")
@@ -94,7 +96,7 @@ def root():
 async def ask_agent(question: str):
     if not _is_ready:
         raise HTTPException(503, "Agent not ready")
-    return {"answer": ask(question)}
+    return {"answer": await run_in_threadpool(ask, question)}
 
 
 # ──────────────────────────────────────────────────────────

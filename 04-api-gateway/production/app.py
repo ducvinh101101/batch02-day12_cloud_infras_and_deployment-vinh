@@ -31,6 +31,7 @@ from contextlib import asynccontextmanager
 
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
@@ -81,7 +82,8 @@ async def security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # Ẩn server info
-    response.headers.pop("server", None)
+    if "server" in response.headers:
+        del response.headers["server"]
     return response
 
 
@@ -144,7 +146,7 @@ async def ask_agent(
     cost_guard.check_budget(username)
 
     # Gọi LLM (mock)
-    response_text = ask(body.question)
+    response_text = await run_in_threadpool(ask, body.question)
 
     # ✅ Ghi nhận usage (mock token count)
     input_tokens = len(body.question.split()) * 2
@@ -156,7 +158,9 @@ async def ask_agent(
         "answer": response_text,
         "usage": {
             "requests_remaining": rate_info["remaining"],
-            "budget_remaining_usd": usage.total_cost_usd,
+            "budget_remaining_usd": max(
+                0, cost_guard.daily_budget_usd - usage.total_cost_usd
+            ),
         },
     }
 
@@ -199,4 +203,4 @@ if __name__ == "__main__":
     print("  student / demo123  (10 req/min, $1/day budget)")
     print("  teacher / teach456 (100 req/min, $1/day budget)")
     print(f"\nDocs: http://localhost:{port}/docs\n")
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

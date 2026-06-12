@@ -1,100 +1,108 @@
-# Lab 12 — Complete Production Agent
+# Medical Research AI Agent - Production Demo
 
-Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
+`AgentMedicalResearch` integrated with the Day 12 production requirements:
 
-## Checklist Deliverable
+- Medical CSV upload, schema detection, AI analysis, chart generation, and web UI.
+- API-key authentication, Redis rate limit, monthly cost guard.
+- Health/readiness checks, graceful shutdown, Docker, Nginx load balancing.
+- Demo mode works without Gemini; full mode uses `GEMINI_API_KEY`.
 
-- [x] Dockerfile (multi-stage, < 500 MB)
-- [x] docker-compose.yml (agent + redis)
-- [x] .dockerignore
-- [x] Health check endpoint (`GET /health`)
-- [x] Readiness endpoint (`GET /ready`)
-- [x] API Key authentication
-- [x] Rate limiting
-- [x] Cost guard
-- [x] Config từ environment variables
-- [x] Structured logging
-- [x] Graceful shutdown
-- [x] Public URL ready (Railway / Render config)
+## Local Demo
 
----
-
-## Cấu Trúc
-
-```
-06-lab-complete/
-├── app/
-│   ├── main.py         # Entry point — kết hợp tất cả
-│   ├── config.py       # 12-factor config
-│   ├── auth.py         # API Key + JWT
-│   ├── rate_limiter.py # Rate limiting
-│   └── cost_guard.py   # Budget protection
-├── Dockerfile          # Multi-stage, production-ready
-├── docker-compose.yml  # Full stack
-├── railway.toml        # Deploy Railway
-├── render.yaml         # Deploy Render
-├── .env.example        # Template
-├── .dockerignore
-└── requirements.txt
+```powershell
+cd 06-lab-complete
+docker compose up --build --scale agent=3 -d --wait
+docker compose ps
 ```
 
----
+Open [http://localhost:8000](http://localhost:8000). The local API key is:
 
-## Chạy Local
-
-```bash
-# 1. Setup
-cp .env.example .env
-
-# 2. Chạy với Docker Compose
-docker compose up
-
-# 3. Test
-curl http://localhost/health
-
-# 4. Lấy API key từ .env, test endpoint
-API_KEY=$(grep AGENT_API_KEY .env | cut -d= -f2)
-curl -H "X-API-Key: $API_KEY" \
-     -X POST http://localhost/ask \
-     -H "Content-Type: application/json" \
-     -d '{"question": "What is deployment?"}'
+```text
+dev-key-change-me
 ```
 
----
+Upload the included sample:
 
-## Deploy Railway (< 5 phút)
-
-```bash
-# Cài Railway CLI
-npm i -g @railway/cli
-
-# Login và deploy
-railway login
-railway init
-railway variables set OPENAI_API_KEY=sk-...
-railway variables set AGENT_API_KEY=your-secret-key
-railway up
-
-# Nhận public URL!
-railway domain
+```text
+sample_data/clinical_trial_diabetes.csv
 ```
 
----
+Demo mode parses the dataset and shows the complete UI without making an LLM
+request. To enable real AI analysis:
 
-## Deploy Render
-
-1. Push repo lên GitHub
-2. Render Dashboard → New → Blueprint
-3. Connect repo → Render đọc `render.yaml`
-4. Set secrets: `OPENAI_API_KEY`, `AGENT_API_KEY`
-5. Deploy → Nhận URL!
-
----
-
-## Kiểm Tra Production Readiness
-
-```bash
-python check_production_ready.py
+```powershell
+$env:GEMINI_API_KEY = "your-key"
+$env:DEMO_MODE = "false"
+docker compose up --build --scale agent=3 -d --wait
 ```
 
-Script này kiểm tra tất cả items trong checklist và báo cáo những gì còn thiếu.
+Reset rate limits and budget before a presentation:
+
+```powershell
+docker compose exec redis redis-cli FLUSHDB
+```
+
+Stop the stack:
+
+```powershell
+docker compose down
+```
+
+Use `docker compose down -v` only when uploaded files, charts, sessions, and
+Redis data should also be deleted.
+
+## API Tests
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/ready
+
+$headers = @{ "X-API-Key" = "dev-key-change-me" }
+Invoke-RestMethod http://localhost:8000/api/budget -Headers $headers
+```
+
+Requests to `/api/chat` and `/api/upload` without `X-API-Key` return HTTP `401`.
+
+## Railway Deployment
+
+1. Create a Railway project.
+2. Add a Redis service.
+3. Add a GitHub service with root directory `06-lab-complete`.
+4. Set these variables on the application service:
+
+```text
+ENVIRONMENT=production
+AGENT_API_KEY=<strong-random-key>
+GEMINI_API_KEY=<your-gemini-key>
+GEMINI_MODEL=gemini-2.5-flash
+DEMO_MODE=false
+REDIS_URL=${{Redis.REDIS_URL}}
+RATE_LIMIT_PER_MINUTE=30
+MONTHLY_BUDGET_USD=10.0
+```
+
+For a Railway test without Gemini, omit `GEMINI_API_KEY` and set
+`DEMO_MODE=true`. If the Free plan cannot provision Redis, set
+`REDIS_URL=memory://`; this is suitable only for a one-replica demo and loses
+rate/budget data on restart.
+
+Generate a public domain and configure health check path `/health`. Enter the
+same `AGENT_API_KEY` in the UI sidebar before using protected functions.
+
+Railway runs one application replica by default. Uploaded files, charts, and
+SQLite medical session metadata are ephemeral unless a Railway volume is
+mounted at `/app/data`, `/app/uploads`, and `/app/outputs`.
+
+## GitHub CI/CD
+
+CI validates Python/JavaScript syntax, production readiness, Compose files, and
+the production Docker image. CD deploys this directory to Railway only after CI
+passes on `main`.
+
+Configure these GitHub repository secrets:
+
+```text
+RAILWAY_TOKEN
+RAILWAY_PROJECT_ID
+RAILWAY_SERVICE_ID
+```

@@ -1,91 +1,61 @@
-# Section 4 — API Gateway & Security
+# Section 4 - API Gateway and Security
 
-## Mục tiêu học
-- Hiểu tại sao cần lớp bảo vệ trước agent
-- Implement API Key authentication
-- Implement JWT authentication (nâng cao)
-- Rate limiting và cost protection
+## Develop: API-Key Authentication
 
----
+```powershell
+cd 04-api-gateway\develop
+docker build -t api-gateway-develop .
+docker run --name api-gateway-develop -d -p 8000:8000 `
+  -e AGENT_API_KEY=my-secret-key api-gateway-develop
 
-## Ví dụ Basic — API Key Authentication
-
-```
-develop/
-├── app.py              # Agent với API Key auth
-├── test_auth.py        # Test script
-└── requirements.txt
+$env:AGENT_API_KEY = "my-secret-key"
+python test_auth.py
+docker rm -f api-gateway-develop
 ```
 
-### Chạy thử
-```bash
-cd basic
-pip install -r requirements.txt
-AGENT_API_KEY=my-secret-key python app.py
+Expected:
 
-# Test với key hợp lệ
-curl -H "X-API-Key: my-secret-key" http://localhost:8000/ask \
-     -X POST -H "Content-Type: application/json" \
-     -d '{"question": "hello"}'
-
-# Test không có key → 401
-curl http://localhost:8000/ask -X POST \
-     -H "Content-Type: application/json" \
-     -d '{"question": "hello"}'
+```text
+PASS: missing=401, invalid=401, valid=200
 ```
 
----
+## Production: JWT, Roles, Rate Limit, Cost Guard
 
-## Ví dụ Advanced — JWT + Rate Limiting + Cost Guard
+```powershell
+cd 04-api-gateway\production
+docker build -t api-gateway-production .
+docker run --name api-gateway-production -d -p 8000:8000 `
+  -e JWT_SECRET=change-this-secret api-gateway-production
 
-```
-production/
-├── app.py              # Full security stack
-├── auth.py             # JWT token logic
-├── rate_limiter.py     # In-memory rate limiter
-├── cost_guard.py       # Token budget và spending alerts
-├── test_advanced.py    # Test suite
-└── requirements.txt
+python test_advanced.py
+docker rm -f api-gateway-production
 ```
 
-### Chạy thử
-```bash
-cd advanced
-pip install -r requirements.txt
-python app.py
+Expected:
 
-# Lấy JWT token
-curl -X POST http://localhost:8000/auth/token \
-     -H "Content-Type: application/json" \
-     -d '{"username": "student", "password": "demo123"}'
+```text
+PASS: JWT auth, protected endpoint, and admin role
+```
 
-# Dùng token
-curl -H "Authorization: Bearer <token>" \
-     http://localhost:8000/ask \
-     -X POST -H "Content-Type: application/json" \
-     -d '{"question": "what is docker?"}'
+Test rate limiting with a fresh container:
 
-# Test rate limit: spam 20 requests liên tiếp
+```powershell
+docker run --name api-gateway-production -d -p 8000:8000 `
+  -e JWT_SECRET=change-this-secret api-gateway-production
 python test_advanced.py --test rate-limit
+docker rm -f api-gateway-production
 ```
 
----
+The student account allows 10 requests/minute; request 11 returns HTTP `429`.
 
-## Luồng bảo vệ
+## Protection Flow
 
-```
+```text
 Request
-  → Auth Check (401 nếu fail)
-  → Rate Limit (429 nếu vượt quota)
-  → Input Validation (422 nếu invalid)
-  → Cost Check (402 nếu hết budget)
-  → Agent (200 nếu mọi thứ OK)
+  -> Authentication (401)
+  -> Role authorization (403)
+  -> Rate limit (429)
+  -> Input validation (422)
+  -> Cost guard (402/503)
+  -> Agent response (200)
 ```
-
----
-
-## Câu hỏi thảo luận
-
-1. Khi nào nên dùng API Key vs JWT vs OAuth2?
-2. Rate limit nên đặt bao nhiêu request/phút cho một AI agent?
-3. Nếu API key bị lộ, bạn phát hiện và xử lý như thế nào?

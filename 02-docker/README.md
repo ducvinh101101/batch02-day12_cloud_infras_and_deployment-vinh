@@ -42,14 +42,16 @@ curl http://localhost:8000/health
 
 ```
 production/
-├── app.py
+├── main.py
 ├── Dockerfile              # Multi-stage build → image nhỏ hơn nhiều
 ├── docker-compose.yml      # Full stack: agent + vector store + redis
 ├── nginx/
 │   └── nginx.conf          # Reverse proxy
-├── .dockerignore
 └── requirements.txt
 ```
+
+Hai Dockerfile dùng project root làm build context để dùng chung `utils/mock_llm.py`.
+Vì vậy `.dockerignore` được đặt ở project root để áp dụng cho cả hai image.
 
 ### Chạy thử
 ```bash

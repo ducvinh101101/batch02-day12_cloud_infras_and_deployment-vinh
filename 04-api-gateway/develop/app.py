@@ -19,11 +19,13 @@ Test:
          -d '{"question":"hello"}' \\
          http://localhost:8000/ask
 """
+import hmac
 import os
 
-
 from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security.api_key import APIKeyHeader
+from pydantic import BaseModel, Field
 import uvicorn
 from utils.mock_llm import ask
 
@@ -46,9 +48,9 @@ def verify_api_key(api_key: str = Security(api_key_header)) -> str:
             status_code=401,
             detail="Missing API key. Include header: X-API-Key: <your-key>",
         )
-    if api_key != API_KEY:
+    if not hmac.compare_digest(api_key, API_KEY):
         raise HTTPException(
-            status_code=403,
+            status_code=401,
             detail="Invalid API key.",
         )
     return api_key
@@ -64,15 +66,19 @@ def root():
     return {"message": "AI Agent API", "auth": "Required for /ask"}
 
 
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+
+
 @app.post("/ask")
 async def ask_agent(
-    question: str,
+    body: AskRequest,
     _key: str = Depends(verify_api_key),  # ✅ require auth
 ):
     """Protected endpoint — cần X-API-Key header"""
     return {
-        "question": question,
-        "answer": ask(question),
+        "question": body.question,
+        "answer": await run_in_threadpool(ask, body.question),
     }
 
 
@@ -84,6 +90,5 @@ def health():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    print(f"API Key: {API_KEY}")
-    print(f"Test: curl -H 'X-API-Key: {API_KEY}' http://localhost:{port}/ask?question=hello")
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
+    print(f"Starting API-key demo on port {port}")
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

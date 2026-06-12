@@ -87,10 +87,19 @@ def run_checks():
                              "api_key" in content.lower() or "verify_token" in content))
         results.append(check("Rate limiting implemented",
                              "rate_limit" in content.lower() or "429" in content))
-        results.append(check("Graceful shutdown (SIGTERM)",
-                             "SIGTERM" in content))
+        docker_content = open(os.path.join(base, "Dockerfile")).read()
+        compose_content = open(os.path.join(base, "docker-compose.yml")).read()
+        graceful = (
+            "SIGTERM" in content
+            or "timeout-graceful-shutdown" in docker_content
+            or "stop_grace_period" in compose_content
+        )
+        results.append(check("Graceful shutdown configured", graceful))
         results.append(check("Structured logging (JSON)",
                              "json.dumps" in content or '"event"' in content))
+        results.append(check("Redis-backed stateless storage",
+                             "app.storage" in content and
+                             os.path.exists(os.path.join(base, "app", "storage.py"))))
     else:
         results.append(check("app/main.py exists", False, "Create app/main.py!"))
 

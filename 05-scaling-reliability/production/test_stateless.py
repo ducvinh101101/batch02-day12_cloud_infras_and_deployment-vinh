@@ -11,10 +11,11 @@ Chạy sau khi docker compose up:
     python test_stateless.py
 """
 import json
+import os
 import urllib.request
 import urllib.error
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 session_id = None
 
 

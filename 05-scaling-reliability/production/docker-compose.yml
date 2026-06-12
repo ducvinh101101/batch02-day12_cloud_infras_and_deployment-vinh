@@ -1,67 +1,37 @@
-# ============================================================
-# Scaling Demo: 3 Agent Instances + Redis + Nginx Load Balancer
-#
-# Chạy: docker compose up --scale agent=3
-# Test: python test_stateless.py
-#
-# Quan sát "served_by" trong response — mỗi request được xử lý
-# bởi instance khác nhau, nhưng session vẫn liên tục vì Redis!
-# ============================================================
-
-version: "3.9"
-
 services:
-
-  # ──────────────────────────────────────
-  # Agent — scale lên 3 instances
-  # ──────────────────────────────────────
   agent:
-    build:
-      context: ../..
-      dockerfile: 05-scaling-reliability/advanced/Dockerfile
+    build: .
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=demo
-      - PORT=8000
-    env_file:
-      - .env.local
+      REDIS_URL: redis://redis:6379/0
+      PORT: "8000"
+      SESSION_TTL_SECONDS: "3600"
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 15s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 30s
     networks:
       - agent_net
-    # Không expose port — chỉ access qua nginx
-    deploy:
-      replicas: 3           # ← scale to 3 instances
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
 
-  # ──────────────────────────────────────
-  # Redis
-  # ──────────────────────────────────────
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 3s
-      retries: 3
+      retries: 5
     networks:
       - agent_net
 
-  # ──────────────────────────────────────
-  # Nginx — Load Balancer
-  # ──────────────────────────────────────
   nginx:
     image: nginx:alpine
     ports:
@@ -69,9 +39,13 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - agent
+      agent:
+        condition: service_healthy
     networks:
       - agent_net
+
+volumes:
+  redis_data:
 
 networks:
   agent_net:

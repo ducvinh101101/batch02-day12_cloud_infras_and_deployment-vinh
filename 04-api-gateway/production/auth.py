@@ -11,7 +11,6 @@ Flow:
 """
 import os
 import jwt
-import time
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

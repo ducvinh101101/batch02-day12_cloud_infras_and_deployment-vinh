@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Agent phân tích và trực quan hóa dữ liệu nghiên cứu y khoa - Upload CSV, tạo biểu đồ thông minh, nhận insight lâm sàng">
+    <title>🏥 Medical Research AI Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ════ Sidebar ════ -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🔬</span>
+                    <div class="logo-text">
+                        <h1>MedViz AI</h1>
+                        <span class="logo-subtitle">Research Data Agent</span>
+                    </div>
+                </div>
+                <button class="btn-icon sidebar-toggle-btn" id="sidebarToggleBtn" title="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+            </div>
+
+            <!-- Dataset Info -->
+            <div class="sidebar-section" id="datasetSection">
+                <h3 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Dataset
+                </h3>
+                <div class="dataset-info" id="datasetInfo">
+                    <p class="empty-state">Chưa có dataset nào được tải lên</p>
+                </div>
+            </div>
+
+            <!-- Chart History -->
+            <div class="sidebar-section">
+                <h3 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                    Lịch sử biểu đồ
+                </h3>
+                <div class="chart-history" id="chartHistory">
+                    <p class="empty-state">Chưa có biểu đồ nào</p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="sidebar-footer">
+                <label class="api-key-label" for="apiKeyInput">API key demo</label>
+                <div class="api-key-row">
+                    <input id="apiKeyInput" class="api-key-input" type="password" autocomplete="off">
+                    <button class="btn btn-primary btn-sm" id="saveApiKeyBtn">Lưu</button>
+                </div>
+                <button class="btn btn-outline btn-sm" id="resetBtn" title="Reset phiên làm việc">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                    Reset Session
+                </button>
+                <div class="sidebar-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Connecting...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ════ Main Content ════ -->
+        <main class="main-content">
+            <!-- Chat Messages -->
+            <div class="chat-container" id="chatContainer">
+                <!-- Welcome Message -->
+                <div class="welcome-screen" id="welcomeScreen">
+                    <div class="welcome-icon">🏥</div>
+                    <h2>Medical Research AI Agent</h2>
+                    <p>Tôi là trợ lý AI chuyên phân tích và trực quan hóa dữ liệu nghiên cứu y khoa.</p>
+                    <div class="welcome-features">
+                        <div class="feature-card">
+                            <span class="feature-icon">📊</span>
+                            <h4>Tạo biểu đồ thông minh</h4>
+                            <p>Tự chọn loại biểu đồ tối ưu cho dữ liệu</p>
+                        </div>
+                        <div class="feature-card">
+                            <span class="feature-icon">🧬</span>
+                            <h4>Phân tích y khoa</h4>
+                            <p>Nhận dạng biomarker, p-value, CI</p>
+                        </div>
+                        <div class="feature-card">
+                            <span class="feature-icon">💬</span>
+                            <h4>Chỉnh sửa tự nhiên</h4>
+                            <p>"Đổi màu xanh", "thêm error bar"</p>
+                        </div>
+                    </div>
+                    <p class="welcome-hint">👆 Bắt đầu bằng cách upload file CSV hoặc gõ tin nhắn bên dưới</p>
+                </div>
+
+                <!-- Messages will be inserted here -->
+                <div class="messages" id="messages"></div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <!-- Upload Zone -->
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".csv" hidden>
+                    <div class="upload-content" id="uploadContent">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>Kéo thả file CSV hoặc <strong>click để chọn</strong></span>
+                    </div>
+                    <div class="upload-progress" id="uploadProgress" hidden>
+                        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                        <span id="uploadStatus">Đang upload...</span>
+                    </div>
+                </div>
+
+                <!-- Chat Input -->
+                <div class="chat-input-wrapper">
+                    <textarea 
+                        class="chat-input" 
+                        id="chatInput" 
+                        placeholder="Hỏi về dữ liệu, yêu cầu biểu đồ, hoặc chỉnh sửa... (Enter để gửi, Shift+Enter xuống dòng)"
+                        rows="1"
+                    ></textarea>
+                    <button class="btn btn-primary btn-send" id="sendBtn" title="Gửi tin nhắn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Chart Modal -->
+    <div class="modal-overlay" id="chartModal" hidden>
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <img class="modal-image" id="modalImage" alt="Chart full view">
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

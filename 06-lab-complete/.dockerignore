@@ -9,3 +9,4 @@ venv/
 *.md
 tests/
 .DS_Store
+screenshots/
