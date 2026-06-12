@@ -5,6 +5,7 @@ and provide medical insights.
 """
 
 import json
+import re
 import traceback
 from typing import Optional
 from dataclasses import dataclass, field, asdict
@@ -359,7 +360,7 @@ Người dùng hỏi: "{prompt}"
 Hãy giải thích chi tiết bằng tiếng Việt, sử dụng thuật ngữ y khoa khi cần."""
 
         response_text = await self._call_llm(llm_prompt)
-        return AgentResponse(text=response_text)
+        return self._response_with_embedded_chart(response_text, session_id, context)
 
     # ── Handle Export ───────────────────────────────────────────
 
@@ -392,7 +393,7 @@ Người dùng: "{prompt}"
 Trả lời câu hỏi bằng tiếng Việt. Nếu liên quan đến dữ liệu, sử dụng context ở trên."""
 
         response_text = await self._call_llm(llm_prompt)
-        return AgentResponse(text=response_text)
+        return self._response_with_embedded_chart(response_text, session_id, context)
 
     # ── LLM Helper Methods ──────────────────────────────────────
 
@@ -541,12 +542,50 @@ CHỈ trả về code Python thuần, KHÔNG dùng markdown, KHÔNG dùng ```pyt
 
     def _clean_code(self, code: str) -> str:
         """Remove markdown formatting from LLM-generated code."""
-        # Remove ```python ... ``` wrapper
         code = code.strip()
-        if code.startswith("```python"):
-            code = code[len("```python"):].strip()
-        elif code.startswith("```"):
-            code = code[3:].strip()
-        if code.endswith("```"):
-            code = code[:-3].strip()
+        fenced = re.findall(
+            r"`{2,3}\s*(?:python|py)?\s*\n(.*?)`{1,3}",
+            code,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if fenced:
+            return max(fenced, key=len).strip()
+
+        code_start = re.search(r"(?m)^(?:import|from)\s+\w+", code)
+        if code_start:
+            return code[code_start.start():].strip().rstrip("`").strip()
         return code
+
+    def _response_with_embedded_chart(self, response_text: str, session_id: str, context: dict) -> AgentResponse:
+        """Execute plotting code embedded in an otherwise textual LLM response."""
+        dataset = context.get("active_dataset")
+        if not dataset or not re.search(r"(?m)^(?:import|from)\s+\w+|`{2,3}\s*(?:python|py)", response_text):
+            return AgentResponse(text=response_text)
+
+        code = self._clean_code(response_text)
+        if "plt." not in code and "seaborn" not in code and "plotly" not in code:
+            return AgentResponse(text=response_text)
+
+        exec_result = self.executor.execute(code, dataset["path"])
+        if exec_result.status != "success" or not exec_result.output_files:
+            return AgentResponse(text=response_text, code=code, error=exec_result.error)
+
+        output = exec_result.output_files[0]
+        chart_config = {
+            "chart_type": "llm_generated",
+            "title": "Phân tích dữ liệu từ AI",
+        }
+        chart_id = self.memory.save_chart(
+            session_id,
+            chart_config,
+            code,
+            output["path"],
+            response_text,
+        )
+        return AgentResponse(
+            text=response_text,
+            chart_path=output["filename"],
+            chart_id=chart_id,
+            code=code,
+            chart_config=chart_config,
+        )

@@ -45,7 +45,8 @@ class CodeExecutor:
             data_path: Path to the CSV data file
             output_filename: Custom output filename (default: auto-generated)
         """
-        # Step 1: Validate code safety
+        # Step 1: Extract Python from an LLM response, then validate it.
+        script = self._extract_python_code(script)
         safety_check = self._validate_code(script)
         if safety_check:
             return ExecutionResult(
@@ -100,13 +101,21 @@ class CodeExecutor:
                     "size_bytes": os.path.getsize(html_path),
                 })
 
-            if result.returncode == 0:
+            if result.returncode == 0 and output_files:
                 return ExecutionResult(
                     status="success",
                     execution_time_ms=elapsed_ms,
                     output_files=output_files,
                     stdout=result.stdout[:5000],  # Limit output size
                     stderr=result.stderr[:2000],
+                )
+            elif result.returncode == 0:
+                return ExecutionResult(
+                    status="error",
+                    execution_time_ms=elapsed_ms,
+                    stdout=result.stdout[:5000],
+                    stderr=result.stderr[:2000],
+                    error="Code ran successfully but did not create a chart image.",
                 )
             else:
                 return ExecutionResult(
@@ -183,6 +192,12 @@ class CodeExecutor:
             script = script.replace("'DATA_FILE_PATH'", f'"{data_path_normalized}"')
             script = script.replace("data.csv", data_path_normalized)
             script = script.replace('"data_path"', f'"{data_path_normalized}"')
+            # LLMs often copy the original upload filename into read_csv().
+            script = re.sub(
+                r"pd\.read_csv\(\s*(['\"])(.*?)\1\s*\)",
+                "pd.read_csv(DATA_FILE_PATH)",
+                script,
+            )
 
         # Replace placeholder output path
         script = re.sub(r'\bOUTPUT_FILE_PATH\s*=\s*[^#\n]+', f'OUTPUT_FILE_PATH = "{output_path_normalized}"', script)
@@ -191,10 +206,37 @@ class CodeExecutor:
         script = script.replace("output_chart.png", output_path_normalized)
         script = script.replace('"output_path"', f'"{output_path_normalized}"')
 
-        # Remove plt.show() calls (non-interactive)
-        script = script.replace("plt.show()", "# plt.show()  # disabled for non-interactive")
+        # Replace interactive display with a server-side image.
+        script = re.sub(
+            r"plt\.show\s*\([^)]*\)",
+            "# plt.show() disabled for non-interactive execution",
+            script,
+        )
+        if "plt." in script and "savefig(" not in script:
+            script += (
+                "\n\nplt.tight_layout()\n"
+                "plt.savefig(OUTPUT_FILE_PATH, dpi=150, bbox_inches='tight', facecolor='white')\n"
+                "plt.close('all')\n"
+            )
 
         return preamble + script
+
+    def _extract_python_code(self, text: str) -> str:
+        """Extract executable Python from markdown or a narrative LLM response."""
+        text = (text or "").strip()
+        fenced = re.findall(
+            r"`{2,3}\s*(?:python|py)?\s*\n(.*?)`{1,3}",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if fenced:
+            return max(fenced, key=len).strip()
+
+        # Some model responses omit the opening fence but still include a code section.
+        code_start = re.search(r"(?m)^(?:import|from)\s+\w+", text)
+        if code_start:
+            return text[code_start.start():].strip().rstrip("`").strip()
+        return text
 
     def _get_safe_env(self) -> dict:
         """Create a restricted environment for subprocess."""
