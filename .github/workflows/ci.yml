@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Python syntax
+        run: python -m compileall -q 02-docker 04-api-gateway 05-scaling-reliability 06-lab-complete
+
+      - name: Check frontend JavaScript syntax
+        run: node --check 06-lab-complete/static/js/app.js
+
+      - name: Run production readiness checks
+        env:
+          PYTHONUTF8: "1"
+        run: python 06-lab-complete/check_production_ready.py
+
+      - name: Validate Docker Compose files
+        run: |
+          docker compose -f 02-docker/production/docker-compose.yml config --quiet
+          docker compose -f 05-scaling-reliability/production/docker-compose.yml config --quiet
+          docker compose -f 06-lab-complete/docker-compose.yml config --quiet
+
+      - name: Build Medical Research Agent image
+        run: docker build -t medical-research-agent:ci 06-lab-complete
