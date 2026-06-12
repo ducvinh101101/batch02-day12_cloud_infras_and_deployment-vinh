@@ -360,7 +360,7 @@ Người dùng hỏi: "{prompt}"
 Hãy giải thích chi tiết bằng tiếng Việt, sử dụng thuật ngữ y khoa khi cần."""
 
         response_text = await self._call_llm(llm_prompt)
-        return self._response_with_embedded_chart(response_text, session_id, context)
+        return await self._response_with_embedded_chart(response_text, session_id, context)
 
     # ── Handle Export ───────────────────────────────────────────
 
@@ -393,7 +393,7 @@ Người dùng: "{prompt}"
 Trả lời câu hỏi bằng tiếng Việt. Nếu liên quan đến dữ liệu, sử dụng context ở trên."""
 
         response_text = await self._call_llm(llm_prompt)
-        return self._response_with_embedded_chart(response_text, session_id, context)
+        return await self._response_with_embedded_chart(response_text, session_id, context)
 
     # ── LLM Helper Methods ──────────────────────────────────────
 
@@ -556,7 +556,7 @@ CHỈ trả về code Python thuần, KHÔNG dùng markdown, KHÔNG dùng ```pyt
             return code[code_start.start():].strip().rstrip("`").strip()
         return code
 
-    def _response_with_embedded_chart(self, response_text: str, session_id: str, context: dict) -> AgentResponse:
+    async def _response_with_embedded_chart(self, response_text: str, session_id: str, context: dict) -> AgentResponse:
         """Execute plotting code embedded in an otherwise textual LLM response."""
         dataset = context.get("active_dataset")
         if not dataset or not re.search(r"(?m)^(?:import|from)\s+\w+|`{2,3}\s*(?:python|py)", response_text):
@@ -567,6 +567,19 @@ CHỈ trả về code Python thuần, KHÔNG dùng markdown, KHÔNG dùng ```pyt
             return AgentResponse(text=response_text)
 
         exec_result = self.executor.execute(code, dataset["path"])
+        retry_count = 0
+        while exec_result.status != "success" and retry_count < 2:
+            retry_count += 1
+            fixed_code = await self._fix_code_with_llm(
+                code,
+                exec_result.error or exec_result.stderr,
+                list(dataset.get("schema", {}).get("column_names", [])),
+            )
+            if not fixed_code:
+                break
+            code = fixed_code
+            exec_result = self.executor.execute(code, dataset["path"])
+
         if exec_result.status != "success" or not exec_result.output_files:
             return AgentResponse(text=response_text, code=code, error=exec_result.error)
 
