@@ -7,6 +7,8 @@
 - Health/readiness checks, graceful shutdown, Docker, Nginx load balancing.
 - Demo mode works without Gemini; full mode uses `GEMINI_API_KEY`.
 
+link demo: https://batch02-agent-railway-production.up.railway.app
+
 ## Local Demo
 
 ```powershell

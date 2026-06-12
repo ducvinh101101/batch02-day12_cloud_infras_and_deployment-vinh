@@ -3,6 +3,7 @@
 Chào mừng bạn đến với dự án **Medical Research AI Agent** (Phiên bản Production-Ready). Tài liệu này cung cấp cái nhìn toàn diện về kiến trúc hệ thống, các module chức năng, các tính năng vận hành ở quy mô production, và hướng dẫn chi tiết cách chạy cũng như triển khai ứng dụng.
 
 ---
+link: https://batch02-agent-railway-production.up.railway.app
 
 ## 1. Giới thiệu tổng quan (Overview)
 
